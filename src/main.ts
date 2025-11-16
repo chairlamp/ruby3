@@ -6,6 +6,7 @@ import { parseMoves } from "./ui/moveParser";
 import { mountCycleList } from "./overlays/cycles/cycleList";
 import { mountPermGrid } from "./overlays/perm/permGrid";
 import { mountCycleWheel } from "./overlays/cycles/cycleWheel";
+import { mountEigenRing } from "./overlays/cycles/eigenRing";
 import "./ui/anchors.css";
 import "./ui/hud.css";
 
@@ -121,6 +122,22 @@ const wheel = mountCycleWheel(wheelHost, () => stickers.getPerm48(), {
   stickers.onStateChanged = () => {
     prev?.();
     wheel.refresh();
+  };
+}
+
+const eigenDiv = document.createElement("div");
+uiRight.appendChild(eigenDiv);
+
+const eigen = mountEigenRing(eigenDiv, () => stickers.getPerm48(), {
+  onHover: (indices) => stickers.setHoverHighlights(indices),
+  size: 180,
+});
+
+{
+  const prev = stickers.onStateChanged;
+  stickers.onStateChanged = () => {
+    prev?.();
+    eigen.refresh();
   };
 }
 

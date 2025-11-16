@@ -4,3 +4,4 @@ export * from "./moves";
 export * from "./parse";
 export * from "./sequence";
 export * from "./state3";
+export * from "./orientation";

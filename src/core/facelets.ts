@@ -46,7 +46,7 @@ const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const mul = (a: V3, s: number): V3 => [a[0] * s, a[1] * s, a[2] * s];
 const dot = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
-const BASIS: Record<Face, { u: V3; v: V3; n: V3 }> = {
+export const BASIS: Record<Face, { u: V3; v: V3; n: V3 }> = {
   U: { u: [1, 0, 0], v: [0, 0, -1], n: [0, 1, 0] },
   D: { u: [1, 0, 0], v: [0, 0, 1], n: [0, -1, 0] },
   F: { u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] },
