@@ -1,58 +1,67 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { createSolvedCubeGroup } from "./view/cubeStatic";
 import { mountMoveUI } from "./ui/controls";
+import { StickerSystem } from "./render/stickers";
+import { parseMoves } from "./ui/moveParser";
 
 const container = document.getElementById("app")!;
-const fpsLabel = document.createElement("div");
-fpsLabel.className = "fps";
-fpsLabel.textContent = "FPS —";
-container.appendChild(fpsLabel);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+function configureColorManagement(r: THREE.WebGLRenderer) {
+  const anyR = r as any;
+  if ("outputColorSpace" in anyR) {
+    anyR.outputColorSpace = (THREE as any).SRGBColorSpace;
+    if ((THREE as any).ColorManagement) (THREE as any).ColorManagement.enabled = true;
+  } else {
+    anyR.outputEncoding = (THREE as any).sRGBEncoding;
+    if ((THREE as any).ColorManagement) (THREE as any).ColorManagement.enabled = true;
+  }
+  r.toneMapping = THREE.ACESFilmicToneMapping;
+  r.toneMappingExposure = 1.2;
+  const ocs = anyR.outputColorSpace ?? "legacy-encoding";
+  console.log("[color]", "outputColorSpace:", ocs);
+}
+configureColorManagement(renderer);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(container.clientWidth, container.clientHeight);
 container.appendChild(renderer.domElement);
 
-const R: any = renderer as any;
-if ("outputColorSpace" in R) {
-  R.outputColorSpace = (THREE as any).SRGBColorSpace;
-  if ((THREE as any).ColorManagement) (THREE as any).ColorManagement.enabled = true;
-} else {
-  R.outputEncoding = (THREE as any).sRGBEncoding;
-  if ((THREE as any).ColorManagement) (THREE as any).ColorManagement.enabled = true;
-}
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
-
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0e14);
+
 const camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 100);
 camera.position.set(6, 4, 6);
 camera.lookAt(0, 0, 0);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
-keyLight.position.set(5, 7, 8);
-scene.add(keyLight);
-const rimLight = new THREE.DirectionalLight(0xffffff, 0.6);
-rimLight.position.set(-6, 3, -5);
-scene.add(rimLight);
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-scene.add(createSolvedCubeGroup());
+const hemi = new THREE.HemisphereLight(0xffffff, 0x222233, 0.45);
+hemi.position.set(0, 1, 0);
+scene.add(hemi);
+
+const key = new THREE.DirectionalLight(0xffffff, 1.6);
+key.position.set(5, 7, 8);
+key.castShadow = false;
+scene.add(key);
+
+const rim = new THREE.DirectionalLight(0xffffff, 0.9);
+rim.position.set(-6, 3, -5);
+scene.add(rim);
+
+const stickers = new StickerSystem();
+scene.add(stickers.object3d);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.minDistance = 4.0;
-controls.maxDistance = 14.0;
+controls.minDistance = 4;
+controls.maxDistance = 14;
 controls.target.set(0, 0, 0);
 controls.update();
 
-console.debug("[ui] mounting move panel…");
 mountMoveUI({
-  onParse(tokens, text) {
-    console.debug("[ui] parsed", tokens, "from", text);
+  onParse(tokens) {
+    stickers.enqueue(tokens as any, 200);
   }
 });
 
@@ -66,18 +75,17 @@ function onResize() {
 window.addEventListener("resize", onResize);
 
 let last = performance.now();
-let frames = 0;
-let acc = 0;
 renderer.setAnimationLoop(() => {
-  controls.update();
-  renderer.render(scene, camera);
   const now = performance.now();
-  acc += now - last;
+  const dt = now - last;
   last = now;
-  frames++;
-  if (acc >= 500) {
-    console.debug("[fps]", Math.round((frames * 1000) / acc));
-    acc = 0;
-    frames = 0;
-  }
+
+  controls.update();
+  stickers.update(dt);
+  renderer.render(scene, camera);
 });
+
+window.play = (sequence: string) => {
+  const tokens = parseMoves(sequence);
+  stickers.enqueue(tokens as any, 200);
+};
