@@ -1,0 +1,26 @@
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+#app {
+  position: relative;
+  background: #0b0e14;
+  color: #c9d1d9;
+  overflow: hidden;
+  font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.fps {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  pointer-events: none;
+  user-select: none;
+}
