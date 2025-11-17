@@ -9,6 +9,8 @@ import { mountCycleWheel } from "./overlays/cycles/cycleWheel";
 import { mountEigenRing } from "./overlays/cycles/eigenRing";
 import { QualityManager, type QualityTier } from "./diag/quality";
 import { A11yManager } from "./a11y/a11y";
+import { createTesseract } from "./render-tesseract/tesseract";
+import { mountR4Controls } from "./ui/r4Controls";
 import "./ui/anchors.css";
 import "./ui/hud.css";
 import "./ui/a11y.css";
@@ -59,6 +61,8 @@ scene.add(rim);
 
 const stickers = new StickerSystem();
 scene.add(stickers.object3d);
+const tesseract = createTesseract({ i: 0, j: 1, k: 2, l: 3 });
+scene.add(tesseract.object3d);
 
 let uiRight = document.getElementById("ui-right") as HTMLDivElement | null;
 if (!uiRight) {
@@ -143,6 +147,15 @@ const eigen = mountEigenRing(eigenDiv, () => stickers.getPerm48(), {
     eigen.refresh();
   };
 }
+
+const r4Div = document.createElement("div");
+r4Div.style.marginTop = "12px";
+uiRoot.appendChild(r4Div);
+
+mountR4Controls(r4Div, {
+  setPlanes: (p) => tesseract.setPlanes(p),
+  setAngles: (theta, phi) => tesseract.setAngles(theta, phi),
+});
 
 let qualityBadge = document.getElementById("quality-badge") as HTMLDivElement | null;
 if (!qualityBadge) {
