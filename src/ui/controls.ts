@@ -15,13 +15,9 @@ export function mountMoveUI(handlers: Handlers = {}): {
   const host = document.getElementById("app") || document.body;
 
   const root = document.createElement("div");
+  root.setAttribute("data-tour", "moves");
   root.className = "panel moves";
   Object.assign(root.style, {
-    position: "absolute",
-    right: "12px",
-    bottom: "12px",
-    width: "320px",
-    zIndex: "10000",
     background: "rgba(10,12,16,0.88)",
     border: "1px solid rgba(255,255,255,0.12)",
     borderRadius: "8px",
@@ -31,6 +27,8 @@ export function mountMoveUI(handlers: Handlers = {}): {
     backdropFilter: "blur(6px)",
     boxShadow: "0 4px 30px rgba(0,0,0,0.45)"
   } as CSSStyleDeclaration);
+
+  root.classList.add("moves-dock");
 
   root.innerHTML = `
     <div class="row title" style="font-weight:600;opacity:0.9;margin-bottom:6px;">Moves</div>
@@ -44,9 +42,9 @@ export function mountMoveUI(handlers: Handlers = {}): {
       <button class="btn util" data-act="clear" title="Clear">Clear</button>
     </div>
     <div class="row input" style="display:flex;gap:6px;margin-bottom:6px;">
-      <input id="moveInput" class="input" placeholder="Type: F R U L D′ F B′ R U" spellcheck="false"
+      <input id="moveInput" class="input" data-role="moves-input" placeholder="Type: F R U L D′ F B′ R U" spellcheck="false"
         style="flex:1;border-radius:6px;border:1px solid rgba(255,255,255,0.12);background:rgba(20,22,27,0.8);color:#e6edf3;padding:6px 8px;outline:none;" />
-      <button id="parseBtn" class="btn parse" style="font-weight:700;">Parse</button>
+      <button id="parseBtn" class="btn parse" data-role="parse-btn" style="font-weight:700;">Parse</button>
     </div>
     <div class="row status" id="parseStatus" style="min-height:16px;opacity:0.9;"></div>
   `;

@@ -15,3 +15,27 @@
     width: 220px;
   }
 }
+
+.moves-dock {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 60;
+  width: min(720px, 92vw);
+  pointer-events: auto;
+}
+
+.moves-dock .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .exports-panel {
+    right: 12px;
+    bottom: 96px;
+  }
+}

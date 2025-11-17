@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { BASIS, FACE_LOCAL_COORDS, FACE_ORDER, idOf, descOf, toGlobal, type Face } from "../core/indexing";
 import { compose48, identity48, type Perm48 } from "../core/perm";
 import { quarter as permQuarter, prime as permPrime, double as permDouble } from "../core/moves";
+import { flagAlloc } from "../diag/frameArena";
 
 const CELL = 1;
 const GUTTER = 0.1;
@@ -84,6 +85,7 @@ export class StickerSystem {
   private overlayGroup: THREE.Group | null = null;
   private overlay: THREE.InstancedMesh | null = null;
   private hidden: number[] = []; // dest indices hidden in base during turn
+  private turnQuat = new THREE.Quaternion();
 
   /** Animation queue */
   private queue: Array<{ face: Face; power: 1 | 2; prime: boolean }> = [];
@@ -102,6 +104,7 @@ export class StickerSystem {
 
   private highlight: THREE.InstancedMesh;
   private _trailLength = 72;
+  private static readonly DEV_ALLOC_GUARD = false;
 
   constructor() {
     // Shared geometry
@@ -209,13 +212,14 @@ export class StickerSystem {
   }
 
   update(dtMs: number): void {
+    if (StickerSystem.DEV_ALLOC_GUARD) flagAlloc();
     if (!this.active) return;
     const a = this.active;
     a.elapsedMs += dtMs;
 
     if (this.overlayGroup) {
       const angle = Math.min(1, a.elapsedMs / a.durationMs) * a.targetAngle;
-      const q = new THREE.Quaternion().setFromAxisAngle(a.axis, angle);
+      const q = this.turnQuat.setFromAxisAngle(a.axis, angle);
       this.overlayGroup.setRotationFromQuaternion(q);
     }
 
@@ -292,12 +296,15 @@ export class StickerSystem {
 
     const zero = new THREE.Vector3(0, 0, 0);
 
-    this.hidden = movers.slice();
-    for (const d of movers) {
-      const idx = movers.indexOf(d);
+    const moverCount = movers.length;
+    this.hidden.length = moverCount;
+    for (let k = 0; k < moverCount; k++) {
+      const d = movers[k];
+      this.hidden[k] = d;
+
       const mWorld = this.slotMats[d].clone();
       const mLocal = invPivot.clone().multiply(mWorld);
-      overlay.setMatrixAt(idx, mLocal);
+      overlay.setMatrixAt(k, mLocal);
 
       // Base -> zero scale
       const s0 = this.slotMats[d].clone();
@@ -308,7 +315,7 @@ export class StickerSystem {
 
     // Colors for overlay from current state[dest] = src
     const c = new THREE.Color();
-    for (let k = 0; k < movers.length; k++) {
+    for (let k = 0; k < moverCount; k++) {
       const dest = movers[k];
       const src = this.state[dest];
       c.setHex(colorForSticker(src));

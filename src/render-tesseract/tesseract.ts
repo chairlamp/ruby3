@@ -1,16 +1,10 @@
 import * as THREE from "three";
-import { rotPlane, type Axis4 } from "../core-r4";
-import {
-  hypercubeVertices4,
-  hypercubeEdges4,
-  identity34,
-  pack34to44,
-  type M34,
-} from "../core-r4";
+import { rotPlane, type Axis4, hypercubeVertices4, hypercubeEdges4 } from "../core-r4";
 
 export type DoublePlane = { i: Axis4; j: Axis4; k: Axis4; l: Axis4 };
+const SCRATCH_MATRIX = new THREE.Matrix4();
 
-export function createTesseract(initial: DoublePlane) {
+export function createTesseract(initial: DoublePlane, renderer: THREE.WebGLRenderer) {
   const verts4 = hypercubeVertices4();
   const edges = hypercubeEdges4();
   const idx = new Uint16Array(edges.length * 2);
@@ -28,43 +22,65 @@ export function createTesseract(initial: DoublePlane) {
     uniforms: {
       uR1: { value: new THREE.Matrix4().identity() },
       uR2: { value: new THREE.Matrix4().identity() },
-      uP: { value: new THREE.Matrix4().identity() },
-      uDepth: { value: 3.2 },
-      uScale: { value: 1.0 },
-      uColor: { value: new THREE.Color(0xECEFF8) },
+      uP0: { value: new THREE.Vector4(1, 0, 0, 0) },
+      uP1: { value: new THREE.Vector4(0, 1, 0, 0) },
+      uP2: { value: new THREE.Vector4(0, 0, 1, 0) },
+      uD: { value: 3.0 },
+      uW0: { value: 0.0 },
+      uHalf: { value: 0.18 },
+      uSliceOn: { value: 0.0 },
+      uColor: { value: new THREE.Color(0xeff6ff) },
     },
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
     vertexShader: `
       attribute vec4 position4D;
       uniform mat4 uR1, uR2;
-      uniform mat4 uP;
-      uniform float uDepth;
-      uniform float uScale;
+      uniform vec4 uP0, uP1, uP2;
+      uniform float uD;
+      uniform float uW0, uHalf, uSliceOn;
+
+      varying float vAlpha;
+
+      vec3 project34(vec4 p4) {
+        vec3 p3 = vec3(dot(uP0, p4), dot(uP1, p4), dot(uP2, p4));
+        float denom = max(1e-3, uD - p4.w);
+        return p3 / denom;
+      }
+
       void main() {
-        vec4 p4 = (uR2 * uR1) * position4D;
-        vec3 p3 = (uP * p4).xyz;
-        float denom = max(1e-4, uDepth - p4.w);
-        p3 /= denom;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p3 * uScale, 1.0);
-      }`,
+        vec4 p4 = uR2 * uR1 * position4D;
+
+        float d = abs(p4.w - uW0);
+        float inner = 0.5 * uHalf;
+        float a = 1.0 - smoothstep(inner, uHalf, d);
+        vAlpha = mix(1.0, a, clamp(uSliceOn, 0.0, 1.0));
+
+        vec3 p3 = project34(p4);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p3, 1.0);
+      }
+    `,
     fragmentShader: `
+      precision highp float;
       uniform vec3 uColor;
-      void main() { gl_FragColor = vec4(uColor, 1.0); }`,
-    transparent: true,
-    depthTest: false,
-    depthWrite: false,
+      varying float vAlpha;
+      void main() {
+        gl_FragColor = vec4(uColor, clamp(vAlpha, 0.0, 1.0));
+      }
+    `,
     linewidth: 1,
   });
 
   const lines = new THREE.LineSegments(geom, mat);
   lines.frustumCulled = false;
-  lines.renderOrder = 999;
 
   let planes = { ...initial };
   let theta = 0;
   let phi = 0;
 
   const toTHREE = (m: Float64Array) => {
-    const t = new THREE.Matrix4();
+    const t = SCRATCH_MATRIX;
     t.set(
       m[0], m[4], m[8], m[12],
       m[1], m[5], m[9], m[13],
@@ -77,8 +93,10 @@ export function createTesseract(initial: DoublePlane) {
   function setAngles(th: number, ph: number) {
     theta = th;
     phi = ph;
-    (mat.uniforms.uR1.value as THREE.Matrix4).copy(toTHREE(rotPlane(planes.i, planes.j, theta)));
-    (mat.uniforms.uR2.value as THREE.Matrix4).copy(toTHREE(rotPlane(planes.k, planes.l, phi)));
+    const A = rotPlane(planes.i, planes.j, theta);
+    const B = rotPlane(planes.k, planes.l, phi);
+    (mat.uniforms.uR1.value as THREE.Matrix4).copy(toTHREE(A));
+    (mat.uniforms.uR2.value as THREE.Matrix4).copy(toTHREE(B));
   }
 
   function setPlanes(p: DoublePlane) {
@@ -86,20 +104,20 @@ export function createTesseract(initial: DoublePlane) {
     setAngles(theta, phi);
   }
 
-  function setProjection(P: M34) {
-    (mat.uniforms.uP.value as THREE.Matrix4).copy(toTHREE(pack34to44(P)));
+  function setProjection(rows: [THREE.Vector4, THREE.Vector4, THREE.Vector4], d: number) {
+    mat.uniforms.uP0.value.copy(rows[0]);
+    mat.uniforms.uP1.value.copy(rows[1]);
+    mat.uniforms.uP2.value.copy(rows[2]);
+    mat.uniforms.uD.value = d;
   }
 
-  function setDepth(d: number) {
-    (mat.uniforms.uDepth.value as number) = d;
+  function setSlice(w0: number, half: number, on: boolean) {
+    mat.uniforms.uW0.value = w0;
+    mat.uniforms.uHalf.value = Math.max(1e-4, half);
+    mat.uniforms.uSliceOn.value = on ? 1.0 : 0.0;
   }
 
-  function setScale(s: number) {
-    (mat.uniforms.uScale.value as number) = s;
-  }
-
-  setProjection(identity34());
   setAngles(0, 0);
 
-  return { object3d: lines, setAngles, setPlanes, setProjection, setDepth, setScale };
+  return { object3d: lines, setAngles, setPlanes, setProjection, setSlice };
 }

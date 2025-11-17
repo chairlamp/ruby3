@@ -11,13 +11,25 @@ import { QualityManager, type QualityTier } from "./diag/quality";
 import { A11yManager } from "./a11y/a11y";
 import { createTesseract } from "./render-tesseract/tesseract";
 import { mountR4Controls } from "./ui/r4Controls";
+import { beginFrame, endFrame } from "./diag/frameArena";
+import { mountFpsHud } from "./diag/fpsHud";
+import { mountGuidedTourLauncher } from "./docs/guide";
+import { mountExportsPanel } from "./docs/exportsPanel";
+import { configureRenderer } from "./render/rendererConfig";
 import "./ui/anchors.css";
 import "./ui/hud.css";
 import "./ui/a11y.css";
+import "./docs/tour.css";
+import "./docs/exportsPanel.css";
 
 const container = document.getElementById("app")!;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: "high-performance",
+  preserveDrawingBuffer: true,
+});
+configureRenderer(renderer);
 function configureColorManagement(r: THREE.WebGLRenderer) {
   const anyR = r as any;
   if ("outputColorSpace" in anyR) {
@@ -61,7 +73,7 @@ scene.add(rim);
 
 const stickers = new StickerSystem();
 scene.add(stickers.object3d);
-const tesseract = createTesseract({ i: 0, j: 1, k: 2, l: 3 });
+const tesseract = createTesseract({ i: 0, j: 1, k: 2, l: 3 }, renderer);
 scene.add(tesseract.object3d);
 
 let uiRight = document.getElementById("ui-right") as HTMLDivElement | null;
@@ -102,6 +114,7 @@ let wheelPanel = document.getElementById("cycle-wheel-fixed") as HTMLDivElement 
 if (!wheelPanel) {
   wheelPanel = document.createElement("div");
   wheelPanel.id = "cycle-wheel-fixed";
+  wheelPanel.setAttribute("data-tour", "cycles");
   Object.assign(wheelPanel.style, {
     background: "rgba(15,23,42,0.82)",
     border: "1px solid #334155",
@@ -133,6 +146,7 @@ const wheel = mountCycleWheel(wheelHost, () => stickers.getPerm48(), {
 }
 
 const eigenDiv = document.createElement("div");
+eigenDiv.setAttribute("data-tour", "eigen");
 uiRight.appendChild(eigenDiv);
 
 const eigen = mountEigenRing(eigenDiv, () => stickers.getPerm48(), {
@@ -150,12 +164,48 @@ const eigen = mountEigenRing(eigenDiv, () => stickers.getPerm48(), {
 
 const r4Div = document.createElement("div");
 r4Div.style.marginTop = "12px";
+r4Div.setAttribute("data-tour", "r4");
 uiRoot.appendChild(r4Div);
 
 mountR4Controls(r4Div, {
   setPlanes: (p) => tesseract.setPlanes(p),
   setAngles: (theta, phi) => tesseract.setAngles(theta, phi),
 });
+
+if ("setSlice" in tesseract) {
+  const slicePanel = document.createElement("div");
+  slicePanel.style.marginTop = "8px";
+  slicePanel.innerHTML = `
+    <div style="margin-top:6px;font-weight:600">Slice (w = w₀)</div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+      <input id="slice-enable" type="checkbox"> Enable
+    </label>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+      w₀ <input id="slice-w0" type="range" min="-1.2" max="1.2" step="0.01" value="0">
+      <span id="slice-w0-v" style="width:44px;text-align:right;">0.00</span>
+    </label>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+      thickness <input id="slice-half" type="range" min="0.02" max="0.60" step="0.01" value="0.18">
+      <span id="slice-half-v" style="width:44px;text-align:right;">0.18</span>
+    </label>
+  `;
+  uiRight.appendChild(slicePanel);
+
+  const elOn = slicePanel.querySelector("#slice-enable") as HTMLInputElement;
+  const elW0 = slicePanel.querySelector("#slice-w0") as HTMLInputElement;
+  const elHalf = slicePanel.querySelector("#slice-half") as HTMLInputElement;
+  const elW0v = slicePanel.querySelector("#slice-w0-v") as HTMLSpanElement;
+  const elHv = slicePanel.querySelector("#slice-half-v") as HTMLSpanElement;
+  const sliceFn = (tesseract as any).setSlice as (w0: number, half: number, on: boolean) => void;
+
+  function pushSlice() {
+    elW0v.textContent = (+elW0.value).toFixed(2);
+    elHv.textContent = (+elHalf.value).toFixed(2);
+    sliceFn(+elW0.value, +elHalf.value, elOn.checked);
+  }
+  elOn.oninput = elW0.oninput = elHalf.oninput = pushSlice;
+  pushSlice();
+}
 
 let qualityBadge = document.getElementById("quality-badge") as HTMLDivElement | null;
 if (!qualityBadge) {
@@ -294,6 +344,7 @@ window.addEventListener("resize", onResize);
 
 let last = performance.now();
 renderer.setAnimationLoop(() => {
+  beginFrame();
   const now = performance.now();
   const dt = now - last;
   last = now;
@@ -302,9 +353,19 @@ renderer.setAnimationLoop(() => {
   controls.update();
   stickers.update(dt);
   renderer.render(scene, camera);
+  endFrame();
 });
 
 (window as any).play = (sequence: string) => {
   const tokens = parseMoves(sequence);
   stickers.enqueue(tokens as any, currentTurnMs);
 };
+mountFpsHud();
+mountGuidedTourLauncher();
+
+const exportsPanel = mountExportsPanel({
+  threeCanvas: renderer.domElement as HTMLCanvasElement,
+  gridCanvas: document.querySelector<HTMLCanvasElement>("#perm-grid canvas"),
+  eigenCanvas: eigenDiv.querySelector<HTMLCanvasElement>("canvas"),
+});
+document.body.appendChild(exportsPanel.el);
